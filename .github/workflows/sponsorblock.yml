@@ -1,4 +1,4 @@
-name: Build IPA with tweaks
+name: Build IPA with tweaks + iSponsorBlock
 on:
   workflow_dispatch:
     inputs:
@@ -249,6 +249,9 @@ jobs:
       - name: Clone YTUHD
         if: ${{ inputs.ytuhd }}
         run: git clone --quiet --depth=1 https://github.com/Tonwalter888/YTUHD.git
+
+      - name: Clone iSponsorBlock
+        run: git clone https://github.com/Galactic-Dev/iSponsorBlock.git 
            
       - name: Clone Return-YouTube-Dislikes
         if: ${{ inputs.ryd }}
@@ -339,6 +342,13 @@ jobs:
           echo "YOUMOD_VERSION=$(grep '^Version:' control | cut -d ' ' -f2)" >> $GITHUB_ENV
           make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
           mv packages/*.deb ${{ github.workspace }}/youmod.deb
+
+      -  name: Build iSponsorBlock
+         run: |
+          cd iSponsorBlock
+          make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless TARGET=iphone:clang:latest:13.0
+          mv packages/*.deb ${{ github.workspace }}/isponsorblock.deb
+
         
       - name: Build YouPiP
         if: ${{ inputs.youpip }}
@@ -501,7 +511,7 @@ jobs:
       - name: Create a Draft Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: youmod-ipa${{ github.run_number }}
+          tag_name: youmod-ipa-isponsorblock${{ github.run_number }}
           name: YouMod_${{ env.YT_VERSION }}_v${{ env.YOUMOD_VERSION }} (${{ github.run_number }}) 
           files: YouMod_${{ env.YT_VERSION }}_v${{ env.YOUMOD_VERSION }}.ipa
           draft: true
