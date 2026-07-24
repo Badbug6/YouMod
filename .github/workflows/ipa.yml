@@ -2,6 +2,16 @@ name: Build IPA with tweaks
 on:
   workflow_dispatch:
     inputs:
+      repo:
+        description: 'Repository to build from'
+        required: true
+        default: 'Tonwalter888/YouMod'
+
+      branch:
+        description: 'Branch to build from'
+        required: true
+        default: 'main'
+
       ipa_url:
         description: "URL to the decrypted IPA file"
         default: ""
@@ -145,10 +155,24 @@ jobs:
         with:
           exclude_inputs: bundle_id,display_name,youpip,ytuhd,ryd,abconfig,youquality,youspeed,youmute,youloop,ytweaks,youslider,ytholdspeed,youchoose,youshare,gonerino,getcap,demc,ytshare,volboost
           
-      - name: Download and Validate IPA
+      - name: Install MEGA downloader
+        if: ${{ startsWith(inputs.ipa_url, 'https://mega.nz/') }}
+        run: brew install megatools
+      - name: Download IPA from Mega share link
+        if: ${{ startsWith(inputs.ipa_url, 'https://mega.nz/') }}
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
         run: |
-          wget "${{ inputs.ipa_url }}" --quiet --no-verbose -O youtube.ipa
+          megadl --no-progress --path youtube.ipa "$IPA_URL"
+      - name: Download IPA from direct URL
+        if: ${{ !startsWith(inputs.ipa_url, 'https://mega.nz/') }}
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+        run: |
+          wget "$IPA_URL" --quiet --no-verbose -O youtube.ipa
 
+      - name: Validate IPA
+        run: |
           file_type=$(file --mime-type -b youtube.ipa)
 
           if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
@@ -178,11 +202,10 @@ jobs:
           }
           echo "THEOS_COMMIT=$(get_commit_hash "https://github.com/theos/theos")" >> $GITHUB_ENV
           echo "OPENYT_COMMIT=$(get_commit_hash "https://github.com/BillyCurtis/OpenYouTubeSafariExtension")" >> $GITHUB_ENV
-          echo "ALDERIS_COMMIT=$(get_commit_hash "https://github.com/hbang/Alderis")" >> $GITHUB_ENV
 
       - name: Cache Theos
         id: cache-theos
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: theos
           key: 18.6-SDK-${{ env.THEOS_COMMIT }}
@@ -196,6 +219,8 @@ jobs:
             git sparse-checkout set --no-cone iPhoneOS18.6.sdk
             git checkout --quiet
             mv *.sdk "$THEOS/sdks"
+            cd ${{ github.workspace }}/theos/vendor/logos
+            git checkout a62370066a97e36d59b200a9fa10c5091f5e8972
             
       - name: Clone headers
         run: |
@@ -230,8 +255,10 @@ jobs:
            chmod +x /usr/local/bin/tbd
 
       - name: Checkout YouMod
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.branch }}
           path: YouMod
 
       - name: Clone Open in YouTube (Safari Extension)
@@ -287,19 +314,9 @@ jobs:
 
       - name: Clone YouSlider
         if: ${{ inputs.youslider }}
-        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YouSlider.git
-
-      - name: Cache Alderis
-        id: cache-alderis
-        if: ${{ inputs.youslider }}
-        uses: actions/cache@v5
-        with:
-          path: Alderis
-          key: Alderis-${{ env.ALDERIS_COMMIT }}
-
-      - name: Clone Alderis
-        if: ${{ inputs.youslider && steps.cache-alderis.outputs.cache-hit != 'true' }}
-        run: git clone --quiet --depth=1 https://github.com/hbang/Alderis.git
+        run: |
+          git clone --quiet --depth=1 https://github.com/PoomSmart/YouSlider.git
+          wget --no-verbose --quiet https://github.com/Tonwalter888/Tonwalter888.github.io/raw/refs/heads/main/deb/alderis.deb
 
       - name: Clone YTHoldForSpeed
         if: ${{ inputs.ytholdspeed }}
@@ -422,13 +439,6 @@ jobs:
           cd YouSlider
           make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
           mv packages/*.deb ${{ github.workspace }}/youslider.deb
-
-      - name: Build Alderis
-        if: ${{ inputs.youslider }}
-        run: |
-          cd Alderis
-          make clean package DEBUG=0 FINALPACKAGE=1 ARCHS=arm64
-          mv packages/*.deb ${{ github.workspace }}/alderis.deb
 
       - name: Build YTHoldForSpeed
         if: ${{ inputs.ytholdspeed }}
